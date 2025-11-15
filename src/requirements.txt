@@ -7,3 +7,4 @@ PyMuPDF
 streamlit
 keybert
 sentence-transformers
+python-dotenv
