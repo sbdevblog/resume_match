@@ -8,7 +8,9 @@ import textwrap
 import os
 
 # Register basic clean font (optional)
-pdfmetrics.registerFont(TTFont('Helvetica', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
+#pdfmetrics.registerFont(TTFont('Helvetica', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
+FONT_PATH = os.path.join(os.path.dirname(__file__), "../fonts/DejaVuSans.ttf")
+pdfmetrics.registerFont(TTFont("DejaVu", FONT_PATH))
 
 def generate_resume_pdf(text: str):
     temp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")

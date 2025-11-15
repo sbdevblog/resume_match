@@ -1,34 +1,81 @@
-# src/match.py
-from processor import extract_candidates_and_selected, clean_text
-from genai_filter import call_groq_filter
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-import streamlit as st
+# match.py
+from sentence_transformers import SentenceTransformer, util
+from processor import clean_text, extract_candidates_and_selected
+import re
+import numpy as np
 
-# Toggle whether to use GenAI filter (if False, uses selected from processor.py)
-USE_GENAI = True
+embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
-def match_resume_job(resume_text: str, jd_text: str) -> float:
-    r = clean_text(resume_text)
-    j = clean_text(jd_text)
+def extract_years(text):
+    match = re.search(r'(\d+)\+?\s*years', text.lower())
+    return int(match.group(1)) if match else 0
 
-    # NEGATIVE TEST HANDLING
-    if not r or not j:
-        return 0.0   # treat as no match
+def embed_skills(skills):
+    """Embed list of skills into vectors."""
+    if not skills:
+        return None
+    return embedder.encode(skills, convert_to_tensor=True)
 
-    try:
-        vec = TfidfVectorizer(stop_words="english")
-        tf = vec.fit_transform([r, j])
-        return float(cosine_similarity(tf[0:1], tf[1:2])[0][0])
-    except ValueError:
+def skill_semantic_similarity(resume_skills, jd_skills):
+    """Average similarity between resume skills and JD skills."""
+    if not resume_skills or not jd_skills:
         return 0.0
-    vec = TfidfVectorizer(stop_words="english")
-    tf = vec.fit_transform([clean_text(resume_text), clean_text(jd_text)])
-    return float(cosine_similarity(tf[0:1], tf[1:2])[0][0])
+    
+    emb_resume = embed_skills(resume_skills)
+    emb_jd = embed_skills(jd_skills)
+
+    sim_matrix = util.cos_sim(emb_resume, emb_jd)
+    return float(sim_matrix.mean())
+
+def smart_ats_score_v2(resume_text, jd_text, matched, missing, filtered_skills):
+    # -------------------------
+    # 1. SKILL MATCH RATIO (50%)
+    # -------------------------
+    total_jd_skills = len(filtered_skills)
+    if total_jd_skills == 0:
+        skill_match_ratio = 0
+    else:
+        skill_match_ratio = len(matched) / total_jd_skills
+
+    # -------------------------
+    # 2. SKILL SEMANTIC SIMILARITY (35%)
+    # -------------------------
+    semantic_skill_score = skill_semantic_similarity(
+        resume_skills=matched + list(set(filtered_skills) - set(missing)),
+        jd_skills=filtered_skills
+    )
+
+    # -------------------------
+    # 3. EXPERIENCE ALIGNMENT (10%)
+    # -------------------------
+    resume_exp = extract_years(resume_text)
+    jd_exp = extract_years(jd_text)
+
+    exp_score = 1 if resume_exp >= jd_exp else 0
+
+    # -------------------------
+    # 4. KEYWORD OVERLAP (5%)
+    # -------------------------
+    resume_words = set(clean_text(resume_text).split())
+    jd_words = set(clean_text(jd_text).split())
+    keyword_overlap = len(resume_words & jd_words) / (len(jd_words) + 1)
+
+    # -------------------------
+    # FINAL SCORE
+    # -------------------------
+    final = (
+        skill_match_ratio * 0.50 +
+        semantic_skill_score * 0.35 +
+        exp_score * 0.10 +
+        keyword_overlap * 0.05
+    )
+
+    return max(0, min(final, 1))  # normalize between 0-1
 
 def compare_skills_hybrid(resume_text: str, jd_text: str, domain_hint: str = ""):
     candidates, selected_ml = extract_candidates_and_selected(resume_text, jd_text)
-    print("ML candidates:", selected_ml)
+    #print("ML candidates:", selected_ml)
+    USE_GENAI = True
     if USE_GENAI:
         try:
             # Ask LLM to filter + canonicalize skills from the ML candidates
