@@ -6,9 +6,27 @@ from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sentence_transformers import SentenceTransformer, util
 from keybert import KeyBERT
+import os
 
-nltk.download("stopwords", quiet=True)
-stop_words = set(stopwords.words("english"))
+
+# Path to your local nltk_data folder
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # /resume-match/src
+NLTK_PATH = os.path.join(BASE_DIR, "../nltk_data")     # /resume-match/nltk_data
+
+# Add the path for NLTK lookup
+nltk.data.path.append(NLTK_PATH)
+
+from nltk.corpus import stopwords
+
+try:
+    stop_words = set(stopwords.words("english"))
+except LookupError:
+    # If still missing, load manually
+    nltk.download("stopwords", download_dir=NLTK_PATH, quiet=True)
+    stop_words = set(stopwords.words("english"))
+    
+# nltk.download("stopwords", quiet=True)
+# stop_words = set(stopwords.words("english"))
 
 EMBED_MODEL = "all-MiniLM-L6-v2"
 embedder = SentenceTransformer(EMBED_MODEL)

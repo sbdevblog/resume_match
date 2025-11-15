@@ -1,7 +1,7 @@
 # src/app.py
 import streamlit as st
 from extract_text import extract_text   # your PDF text extractor
-from match import match_resume_job, compare_skills_hybrid
+from match import smart_ats_score_v2, compare_skills_hybrid
 from resume_generator import generate_resume_with_ai
 from pdf_generator import generate_resume_pdf
 
@@ -27,7 +27,17 @@ if st.button("Analyze"):
             # if your import_file returns a temp path use that; here we assume file-like object accepted by extract_text
             resume_text = extract_text(rpath)
             jd_text = extract_text(jpath)
-        score = match_resume_job(resume_text, jd_text)
+        #score = match_resume_job(resume_text, jd_text)
+        missing, extra, matched, filtered = compare_skills_hybrid(resume_text, jd_text, domain_hint)
+
+        score = smart_ats_score_v2(
+            resume_text=resume_text,
+            jd_text=jd_text,
+            matched=matched,
+            missing=missing,
+            filtered_skills=filtered
+        )
+        
         st.session_state.score = score
         st.session_state.resume_text = resume_text
         st.session_state.jd_text  =  jd_text
